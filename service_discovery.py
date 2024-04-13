@@ -35,8 +35,10 @@ async def run_nats_client():
     async def announce_service():
         """Announce service availability and capabilities."""
         # Convert dict to JSON string if using json for message payload
-        await nats_client.publish("inference.available", json.dumps(our_models).encode())
-        await nats_client.publish("models.available", json.dumps(our_models).encode())
+        for model in our_models:
+            await nats_client.publish("inference.available", json.dumps({
+                "selected_model": model
+                }).encode())
         print("announced service availability for models: ", our_models)
         
     async def announce_service_unavailability(model):
@@ -52,15 +54,15 @@ async def run_nats_client():
         """Listen on 'inference.requested' and process inference requests."""
         async def request_handler(msg):
             subject = msg.subject
-            data = msg.data.decode()
+            data = json.loads(msg.data.decode())
             print(f"Received a request on '{subject}': {data}")
+            requested_model = data
             # Reply to the request, if no specific model is requested, reply with any available model
-            if data == "":
+            if data.get("name", "") == "":
                 ## no model requested, reply with any available model from our_models
-                selected_model = json.dumps(our_models[0])
+                selected_model = our_models[0]
             else:
                 ## model requested, reply with the requested model
-                requested_model = json.loads(data)
                 matching_models= []
                 selected_model = None
                 ## do we have this model loaded?
@@ -71,13 +73,13 @@ async def run_nats_client():
                         if re.match(requested_model["name"], model["name"]):
                             matching_models.append(model)
                     else:
-                        if requested_model["name"] == model["name"]:
+                        if requested_model.get("name") == model["name"]:
                             matching_models.append(model)
                             
                     ## check if the model has a quantization attribute with a value
                     
                     if requested_model.get("quantization") is None:
-                        selected_model = json.dumps(matching_models[0])
+                        selected_model = matching_models[0]
                     ## if we have a match, check if the model is quantized
                     if len(matching_models) > 0:
                         ## get the first model that matches the requested quantization
@@ -85,19 +87,19 @@ async def run_nats_client():
                             ## check if use_regex_quantization is set to True, if so match using regex, if not match using exact string match
                             if requested_model["use_regex_quantization"]:
                                 if re.match(requested_model["quantization"], model["quantization"]):
-                                    selected_model = json.dumps(model)
+                                    selected_model = model
                             else:
                                 if requested_model["quantization"] == model["quantization"]:
-                                    selected_model = json.dumps(model)
-                if selected_model is None:
-                    return 
-                else:
-                    reply = json.dumps({
-                        "requested_model": requested_model,
-                        "selected_model": selected_model
-                    })
-                    await nats_client.publish("inference.requested", reply.encode())
-                    print(f"Published a message on 'inference.requested': {selected_model}")
+                                    selected_model = model
+            if selected_model is None:
+                return 
+            else:
+                reply = json.dumps({
+                    "requested_model": requested_model,
+                    "selected_model": selected_model
+                })
+                await nats_client.publish("inference.available", reply.encode())
+                print(f"Published a message on 'inference.available': {reply}")
 
         # Subscribe to the channel
         await nats_client.subscribe("inference.requested", cb=request_handler)
@@ -105,7 +107,6 @@ async def run_nats_client():
     async def periodic_health_check():
         """Periodically check the health of the service and re-announce if necessary."""
         while True:
-            # Implement health check logic
             ## ping every model
             for model in our_models:
                 model_url = model["url"]
@@ -118,7 +119,6 @@ async def run_nats_client():
                 ## if the model is not healthy, announce the service unavailability
                 except requests.exceptions.RequestException as e:
                     print(f"Error checking model health: {e}")
-                    health_ok = False
                     ## announce that the model is no longer available
                     await announce_service_unavailability(model)
                 
