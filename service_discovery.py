@@ -110,12 +110,17 @@ async def run_nats_client():
             ## ping every model
             for model in our_models:
                 model_url = model["url"]
-                ## it's the baseurl of the model, you can remove the /v1 and check /openapi.json
-                model_url = model_url.replace("/v1", "")
-                ## check if the model is healthy
+                ## it's the baseurl of the model, you can check /models endpoint to see if the model is healthy
                 try:
-                    response = requests.get(f"{model_url}/openapi.json")
+                    response = requests.get(f"{model_url}/models")
                     response.raise_for_status()
+                    
+                    response_json = response.json()
+                    response_json = response_json.get("data", {})
+                    ## you can get a list of models loaded on the server from this url
+                    ## you could dynamically check add all of the models to the list above
+                    ## but I've left that as an exercise for you to figure out
+                    print(f"Model health check response: {response_json}")
                 ## if the model is not healthy, announce the service unavailability
                 except requests.exceptions.RequestException as e:
                     print(f"Error checking model health: {e}")
