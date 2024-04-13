@@ -29,7 +29,8 @@ our_models = [
 async def run_nats_client():
     # Establish a connection to the NATS server
     nats_client = NATS()
-    await nats_client.connect("nats://0.0.0.0:4222")
+    nats_client_url = os.getenv("NATS_SERVER_URL", "nats://0.0.0.0:4222")
+    await nats_client.connect(nats_client_url)
 
     async def announce_service():
         """Announce service availability and capabilities."""
