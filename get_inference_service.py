@@ -53,6 +53,9 @@ class InferenceServerManager:
         """
         Listens for the inference.available message and updates the list of available servers.
         """
+        print("Listening for available models")
+        print(new_server_cb)
+        print(server_unavailable_cb)
         async def available_handler(msg):
             print("Received models: ", msg.data.decode())
             models = json.loads(msg.data.decode())

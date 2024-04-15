@@ -96,7 +96,7 @@ async def run_nats_client():
 
     async def periodic_health_check():
         """Periodically check the health of the service and re-announce if necessary."""
-        our_servers = []
+        our_models.clear()
         while True:
             ## ping every server
             for model in our_servers:
@@ -124,6 +124,8 @@ async def run_nats_client():
                             "filename": filename
                         }
                         our_models.append(our_model)
+                    ## announce the service availability
+                    await announce_service()
                 ## if the model is not healthy, announce the service unavailability
                 except requests.exceptions.RequestException as e:
                     print(f"Error checking model health: {e}")
