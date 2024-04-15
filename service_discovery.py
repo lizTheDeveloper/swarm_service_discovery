@@ -10,21 +10,11 @@ import requests
 import os
 dotenv.load_dotenv()
 
-
-our_models = [
-    {
-        "name": "TheBloke/Llama-2-70B-Chat-GGUF/llama-2-70b-chat.Q2_K.gguf", 
-        "quantization": "Q2_K", 
-        "ram": "64GB",
-        "url": "https://b9a0-2601-1c2-100-ded-c1a3-69cc-cf1d-b34d.ngrok-free.app/v1", ## this is not a real url, use your cloudflare or ngrok url, or your cloud resource url
-        "filename": "llama-2-70b-chat.Q2_K.gguf", ## if quantization is used, you'll have a specific thing,
-        "loras": [{
-            ## undefined schema for now
-    
-        }]
-    }
-    # Additional models go here
+our_servers = [
+    "https://b9a0-2601-1c2-100-ded-c1a3-69cc-cf1d-b34d.ngrok-free.app/v1"
 ]
+
+our_models = []
 
 async def run_nats_client():
     # Establish a connection to the NATS server
@@ -106,10 +96,11 @@ async def run_nats_client():
 
     async def periodic_health_check():
         """Periodically check the health of the service and re-announce if necessary."""
+        our_servers = []
         while True:
-            ## ping every model
-            for model in our_models:
-                model_url = model["url"]
+            ## ping every server
+            for model in our_servers:
+                model_url = model
                 ## it's the baseurl of the model, you can check /models endpoint to see if the model is healthy
                 try:
                     response = requests.get(f"{model_url}/models")
@@ -121,6 +112,18 @@ async def run_nats_client():
                     ## you could dynamically check add all of the models to the list above
                     ## but I've left that as an exercise for you to figure out
                     print(f"Model health check response: {response_json}")
+                    models = response_json
+                    for model in models:
+                        filename = model.get("id","").split("/")[-1]
+                        quantization = model.get("id","").split(".")[-2]
+                        
+                        our_model = {
+                            "name": model["id"],
+                            "quantization": quantization,
+                            "url": model_url,
+                            "filename": filename
+                        }
+                        our_models.append(our_model)
                 ## if the model is not healthy, announce the service unavailability
                 except requests.exceptions.RequestException as e:
                     print(f"Error checking model health: {e}")
@@ -141,12 +144,14 @@ async def run_nats_client():
     ## this is a good practice to let the clients know that the service is no longer available
     ## and they should look for another service
     ## you can do this by adding a signal handler for SIGTERM or SIGINT
-    async def signal_handler(sig, frame):
+    def signal_handler(sig, frame):
         print("Service is shutting down")
-        ## announce on the inference.available channel that the service is no longer available
-        await announce_service_unavailability()
-        await nats_client.close()
+        loop = asyncio.get_event_loop()
+        loop.create_task(announce_service_unavailability())
+        loop.create_task(nats_client.close())
+        loop.stop()
         sys.exit(0)
+        
         
     
         
