@@ -16,7 +16,7 @@ our_models = [
         "name": "TheBloke/Llama-2-70B-Chat-GGUF/llama-2-70b-chat.Q2_K.gguf", 
         "quantization": "Q2_K", 
         "ram": "64GB",
-        "url": "https://9f18-97-115-139-28.ngrok-free.app/v1", ## this is not a real url, use your cloudflare or ngrok url, or your cloud resource url
+        "url": "https://b9a0-2601-1c2-100-ded-c1a3-69cc-cf1d-b34d.ngrok-free.app/v1", ## this is not a real url, use your cloudflare or ngrok url, or your cloud resource url
         "filename": "llama-2-70b-chat.Q2_K.gguf", ## if quantization is used, you'll have a specific thing,
         "loras": [{
             ## undefined schema for now
