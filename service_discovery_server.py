@@ -10,9 +10,7 @@ import requests
 import os
 dotenv.load_dotenv()
 
-our_servers = [
-    "https://916f-97-115-139-28.ngrok-free.app/v1"
-]
+our_servers = []
 
 our_models = []
 
@@ -51,6 +49,8 @@ async def run_nats_client():
             # Reply to the request, if no specific model is requested, reply with any available model
             if data.get("name", "") == "":
                 ## no model requested, reply with any available model from our_models
+                if len(our_models) == 0:
+                    return
                 selected_model = our_models[0]
             else:
                 ## model requested, reply with the requested model
@@ -94,6 +94,38 @@ async def run_nats_client():
 
         # Subscribe to the channel
         await nats_client.subscribe("inference.requested", cb=request_handler)
+    
+    async def listen_for_new_servers():
+        """Listen on 'inference.new_server' and process new server announcements. Add to our_servers list."""
+        
+        
+        async def new_server_handler(msg):
+            subject = msg.subject
+            data = msg.data.decode()
+            print(f"Received a request on '{subject}': {data}")
+            our_servers.append(data)
+            print(f"New server available: {data}")
+            await periodic_health_check()
+            await announce_service()
+            
+        await nats_client.subscribe("inference.new_server", cb=new_server_handler)
+        
+    
+    async def remove_unavailable_server():
+        """Listen on 'inference.unavailable' and process unavailable server announcements. Remove from our_servers list."""
+        
+        async def unavailable_server_handler(msg):
+            subject = msg.subject
+            data = msg.data.decode()
+            print(f"Received a request on '{subject}': {data}")
+            if data in our_servers:
+                our_servers.remove(data)
+                print(f"Server unavailable: {data}")
+                
+        await nats_client.subscribe("inference.unavailable", cb=unavailable_server_handler)
+        
+        
+    
 
     async def periodic_health_check():
         """Periodically check the health of the service and re-announce if necessary."""
@@ -140,6 +172,12 @@ async def run_nats_client():
 
     # Start listening for inference requests
     await listen_for_requests()
+    
+    # Start listening for new servers
+    await listen_for_new_servers()
+    
+    # Start listening for unavailable servers
+    await remove_unavailable_server()
     
     
     
